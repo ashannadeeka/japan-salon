@@ -211,7 +211,7 @@
                                             class="card-footer d-flex justify-content-between align-items-center bg-white">
                                             <div class="d-flex align-items-center gap-2">
                                                 <span
-                                                    class="fw-bolder">¥{{ number_format($service->price, 2) }}</span>
+                                                    class="fw-bolder">¥{{ number_format($service->price, 0) }}</span>
                                                 @unless ($service->is_active)
                                                 @endunless
                                             </div>
@@ -499,11 +499,13 @@
     <div class="container-fluid location-section py-5">
         <div class="row align-items-center pt-4">
             <div class="col-12 mx-auto text-center text-second px-0">
-                <h2 class="font-40 fw-bold pb-lg-5 pb-sm-5 pb-3 jost-font">営業時間</h2>
-                <iframe
+                <h2 class="font-40 fw-bold pb-lg-5 pb-sm-5 pb-3 jost-font">場所</h2>
+                <iframe src="https://www.google.com/maps/embed?pb=!1m14!1m8!1m3!1d96296.22871197909!2d130.3716734!3d33.5446092!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x354191191b6593f7%3A0xd543562c29902dc4!2sCherish%20Fukuoka!5e1!3m2!1sja!2sjp!4v1767289299413!5m2!1sja!2sjp" 
+                    class="map" style="border:0;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+                <!-- <iframe
                     src="google.com/maps/place/Cherish+Fukuoka/@33.558991,130.4258376,1382m/data=!3m2!1e3!4b1!4m6!3m5!1s0x354191191b6593f7:0xd543562c29902dc4!8m2!3d33.5589866!4d130.4284125!16s%2Fg%2F11yr1k0zdw?entry=tts&g_ep=EgoyMDI1MTIwOS4wIPu8ASoASAFQAw%3D%3D&skid=18c93bac-7bd2-4f8b-b3cb-7325a18367c0"
                     class="map" style="border:0;" allowfullscreen="" loading="lazy"
-                    referrerpolicy="no-referrer-when-downgrade"></iframe>
+                    referrerpolicy="no-referrer-when-downgrade"></iframe> -->
             </div>
         </div>
     </div>
@@ -612,7 +614,7 @@
                                 class="form-control @error('name') is-invalid @enderror" value="{{ old('name') }}"
                                 placeholder="氏名を入力してください"
                                 required>
-                            <div class="invalid-feedback text-white">氏名は2文字以上100文字以下で入力してください。</div>
+                            <div class="invalid-feedback text-white">2文字以上100文字以下で入力してください。</div>
                             @error('name')
                                 <div class="text-danger font-14 mt-1"><i
                                         class="fa-solid fa-exclamation-circle me-1"></i>{{ $message }}</div>
