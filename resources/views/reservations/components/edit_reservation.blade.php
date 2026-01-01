@@ -1,6 +1,6 @@
 <!-- Button trigger modal -->
 <button type="button" class="btn btn-info btn-sm text-white" data-bs-toggle="modal" data-bs-target="#edit-reservation{{ $reservation->id }}">
-    <i class="fa fa-edit"></i> Edit
+    <i class="fa fa-edit"></i> 修正
 </button>
 
 <!-- Modal -->

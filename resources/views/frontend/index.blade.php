@@ -264,7 +264,7 @@
                                 @endforeach
                             @else
                                 <div class="col-12">
-                                    <div class="alert alert-info mb-0 font-16 fw-normal">No services found.</div>
+                                    <div class="alert alert-info mb-0 font-16 fw-normal">サービスが見つかりません。</div>
                                 </div>
                             @endif
                         </div>
@@ -593,7 +593,7 @@
                     @endif
                     @if ($errors->any())
                         <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                            <i class="fa-solid fa-circle-xmark me-2"></i><strong>Validation Error:</strong>
+                            <i class="fa-solid fa-circle-xmark me-2"></i><strong>入力エラー：</strong>
                             <ul class="mb-0 mt-2">
                                 @foreach ($errors->all() as $error)
                                     <li>{{ $error }}</li>
@@ -724,7 +724,6 @@
                                     class="required-star">*</span></label>
                             <input type="email" id="email" name="email" maxlength="255"
                                 class="form-control @error('email') is-invalid @enderror" value="{{ old('email') }}"
-                                placeholder="example@email.com"
                                 required>
                             <div class="invalid-feedback text-white">有効なメールアドレスを入力してください。</div>
                             @error('email')

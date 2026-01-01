@@ -100,25 +100,30 @@ $testimonials = Testimonial::where('is_active', true)
             ]);
         }
 
-        // Check if slot is already fully booked (max 2 per slot)
-        $existingCount = Reservation::where('date', $date)
-            ->where('time', $time)
-            ->count();
-        if ($existingCount >= 2) {
-            throw ValidationException::withMessages([
-                'datetime' => ['この時間帯は満席です。別の時間をお選びください。'],
-            ]);
-        }
+        // Use database transaction with locking to prevent race conditions
+        $reservation = DB::transaction(function () use ($date, $time, $request) {
+            // Check if slot is already fully booked (max 2 per slot)
+            // lockForUpdate() prevents other transactions from reading until this completes
+            $existingCount = Reservation::where('date', $date)
+                ->where('time', $time)
+                ->lockForUpdate()
+                ->count();
+            if ($existingCount >= 2) {
+                throw ValidationException::withMessages([
+                    'datetime' => ['この時間帯は満席です。別の時間をお選びください。'],
+                ]);
+            }
 
-        $reservation = Reservation::create([
-            'service_id'     => $request->service_id,
-            'date'           => $date,
-            'time'           => $time,
-            'name'           => $request->name,
-            'phone'          => $request->phone,
-            'email'          => $request->email,
-            'other_request'  => $request->other_request,
-        ]);
+            return Reservation::create([
+                'service_id'     => $request->service_id,
+                'date'           => $date,
+                'time'           => $time,
+                'name'           => $request->name,
+                'phone'          => $request->phone,
+                'email'          => $request->email,
+                'other_request'  => $request->other_request,
+            ]);
+        });
 
         // Send confirmation email to customer
         Mail::to($reservation->email)->send(new ReservationConfirmation($reservation));
