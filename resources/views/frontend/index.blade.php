@@ -515,7 +515,8 @@
                 <div class="col-12 jost-font text-main text-center mx-auto">
                     <h2 class="font-40 fw-bold">
                         お客様の声
-                    </h2 <div class="row g-4">
+                    </h2>
+                    <div class="row g-4">
                     <div class="col-sm-12">
                         <div id="customers-testimonials" class="owl-carousel" role="region"
                             aria-roledescription="carousel" aria-label="Testimonials">
@@ -650,17 +651,20 @@
                                         '18:30',
                                     ];
 
+                                    // Use Japan timezone for date calculations
+                                    $japanNow = \Carbon\Carbon::now('Asia/Tokyo');
                                     $oldDate = old('datetime')
-                                        ? \Carbon\Carbon::parse(old('datetime'))->format('Y-m-d')
-                                        : now()->format('Y-m-d');
-                                    $oldTime = old('datetime')
-                                        ? \Carbon\Carbon::parse(old('datetime'))->format('H:i')
+                                        ? \Carbon\Carbon::parse(old('datetime'), 'Asia/Tokyo')->format('Y-m-d')
                                         : '';
+                                    $oldTime = old('datetime')
+                                        ? \Carbon\Carbon::parse(old('datetime'), 'Asia/Tokyo')->format('H:i')
+                                        : '';
+                                    $minDate = $japanNow->format('Y-m-d');
                                 @endphp
 
                                 <input type="date" id="dateInput"
                                     class="form-control @error('datetime') is-invalid @enderror"
-                                    value="{{ $oldDate }}" min="{{ now()->format('Y-m-d') }}" required>
+                                    value="{{ $oldDate }}" min="{{ $minDate }}" required>
 
                                 <select id="timeSelect" class="form-select @error('datetime') is-invalid @enderror"
                                     required>
@@ -857,8 +861,19 @@
     const allowedTimes = @json($allowedTimes);
     const closedDays = [1, 4]; // Monday, Thursday
 
-    const serverNowMs = @json((int) \Carbon\Carbon::now()->getTimestamp() * 1000);
-    const clockOffsetMs = serverNowMs - Date.now();
+    // Get current Japan time from server (always uses Asia/Tokyo regardless of server timezone)
+    // This returns the Unix timestamp which is timezone-independent
+    const serverJapanTimestampMs = @json((int) \Carbon\Carbon::now('Asia/Tokyo')->getTimestampMs());
+    
+    // Calculate the offset between server's Japan time and client's local clock
+    // This accounts for: 1) any client clock drift, 2) network latency (minimal)
+    const clockOffsetMs = serverJapanTimestampMs - Date.now();
+    
+    // Japan timezone offset in milliseconds (UTC+9)
+    const JAPAN_OFFSET_MS = 9 * 60 * 60 * 1000;
+    
+    // Helper: Get current time in Japan as milliseconds since epoch
+    const getNowJapanMs = () => Date.now() + clockOffsetMs;
 
     const timeToMinutes = t => {
         const [h, m] = t.split(':').map(Number);
@@ -869,7 +884,27 @@
         String(Math.floor(m / 60)).padStart(2, '0') + ':' +
         String(m % 60).padStart(2, '0');
 
-    const isClosedDay = dateStr => closedDays.includes(new Date(dateStr).getDay());
+    // Check if a date string (YYYY-MM-DD) falls on a closed day
+    // The date is already in Japan timezone format from the date picker
+    const isClosedDay = dateStr => {
+        const [y, m, d] = dateStr.split('-').map(Number);
+        // Create date at noon Japan time to avoid date boundary issues
+        const japanNoonUtc = Date.UTC(y, m - 1, d, 12, 0) - JAPAN_OFFSET_MS;
+        const date = new Date(japanNoonUtc);
+        return closedDays.includes(date.getUTCDay());
+    };
+    
+    // Get current date in Japan timezone as YYYY-MM-DD string
+    const getJapanDateString = () => {
+        // Get current Japan time as UTC timestamp
+        const nowJapanMs = getNowJapanMs();
+        // Create a date object and add Japan offset to get Japan local time components
+        const japanDate = new Date(nowJapanMs + JAPAN_OFFSET_MS);
+        const y = japanDate.getUTCFullYear();
+        const m = String(japanDate.getUTCMonth() + 1).padStart(2, '0');
+        const d = String(japanDate.getUTCDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+    };
 
     const combineAndSetHidden = () => {
         hiddenDatetime.value =
@@ -893,11 +928,13 @@
     }
 
     /* ---------------- FLATPICKR ---------------- */
-  /* ---------------- FLATPICKR ---------------- */
+    // Get today's date in Japan timezone for minDate
+    const todayJapan = getJapanDateString();
+    
     if (typeof flatpickr !== 'undefined') {
         flatpickr(dateInput, {
             dateFormat: 'Y-m-d',
-            minDate: 'today',
+            minDate: todayJapan, // Use Japan's current date
             disable: [
                 function(date) {
                     // Disable Mondays (1) and Thursdays (4)
@@ -909,8 +946,8 @@
             onReady: function(selectedDates, dateStr, instance) {
                 // Set placeholder when flatpickr is ready
                 instance.input.placeholder = '日付を選択...';
-                // Clear any default value
-                if (!instance.input.value || closedDays.includes(new Date(instance.input.value).getDay())) {
+                // Clear any default value if it's on a closed day
+                if (instance.input.value && isClosedDay(instance.input.value)) {
                     instance.clear();
                 }
             }
@@ -918,10 +955,14 @@
     } else {
         // Fallback if flatpickr is not loaded
         dateInput.placeholder = '日付を選択...';
+        // Set min attribute for native date input (Japan's today)
+        dateInput.min = todayJapan;
     }
     /* ---------------- BASE TIME OPTIONS ---------------- */
     function refreshBaseTimeOptions() {
-        const now = Date.now() + clockOffsetMs;
+        // Get current time in Japan timezone (UTC timestamp)
+        const nowJapanMs = getNowJapanMs();
+        
         timeSelect.innerHTML = '<option value="">時間を選択...</option>';
 
         allowedTimes.forEach(t => {
@@ -930,10 +971,19 @@
             opt.textContent = t;
 
             if (dateInput.value) {
+                // Parse date and time
                 const [y, m, d] = dateInput.value.split('-').map(Number);
                 const [hh, mm] = t.split(':').map(Number);
-                const slotDate = new Date(y, m - 1, d, hh, mm);
-                if (slotDate.getTime() <= now) opt.disabled = true;
+                
+                // Calculate the slot time as UTC milliseconds
+                // The slot is in Japan time, so we create UTC for that Japan time
+                // then convert to actual UTC by subtracting Japan offset
+                const slotUtcMs = Date.UTC(y, m - 1, d, hh, mm) - JAPAN_OFFSET_MS;
+                
+                // Disable if slot time is in the past or equal to now
+                if (slotUtcMs <= nowJapanMs) {
+                    opt.disabled = true;
+                }
             }
 
             timeSelect.appendChild(opt);
@@ -944,26 +994,43 @@
  async function applyReservationBlocking(date) {
     if (!date) return;
 
+    // Business hours in minutes (10:30 = 630, 18:30 = 1110)
+    const businessStart = 630;
+    const businessEnd = 1110;
+
     try {
         const res = await fetch(`/reservations-by-date?date=${date}`);
         if (!res.ok) throw new Error('Network error');
 
         const data = await res.json();
-        // example response:
-        // { "15:00": 2, "16:30": 1 }
+        // Response format:
+        // { 
+        //   reservations: { "15:00": 2, "16:30": 1 },
+        //   proximityBlocks: [ { start: 690, end: 810 } ]  // in minutes
+        // }
+        
+        const reservations = data.reservations || data;
+        const proximityBlocks = data.proximityBlocks || [];
 
         const blockedRanges = [];
 
-        /* -------- SAME TIME SLOT >= 2 → BLOCK ±1 HOUR -------- */
-        Object.entries(data).forEach(([timeStr, count]) => {
+        /* -------- CONDITION 1: SAME TIME SLOT >= 2 → BLOCK ±1 HOUR -------- */
+        Object.entries(reservations).forEach(([timeStr, count]) => {
             if (count >= 2) {
                 const centerMin = timeToMinutes(timeStr);
-
-                blockedRanges.push([
-                    centerMin - 60, // 1 hour before
-                    centerMin + 60  // 1 hour after
-                ]);
+                // Clamp to business hours
+                const blockStart = Math.max(centerMin - 60, businessStart);
+                const blockEnd = Math.min(centerMin + 60, businessEnd);
+                blockedRanges.push([blockStart, blockEnd]);
             }
+        });
+
+        /* -------- CONDITION 2: TWO RESERVATIONS WITHIN 1 HOUR → BLOCK FROM FIRST TO LAST+1HR -------- */
+        proximityBlocks.forEach(block => {
+            // Already clamped in backend, but ensure safety
+            const blockStart = Math.max(block.start, businessStart);
+            const blockEnd = Math.min(block.end, businessEnd);
+            blockedRanges.push([blockStart, blockEnd]);
         });
 
         /* -------- APPLY BLOCKS TO TIME OPTIONS -------- */
