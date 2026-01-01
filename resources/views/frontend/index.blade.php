@@ -1058,20 +1058,40 @@
     /* ---------------- EVENTS ---------------- */
     dateInput.addEventListener('change', async function () {
         clearDatetimeError();
+        
+        // Clear any previously selected time when date changes
+        timeSelect.value = '';
+        combineAndSetHidden();
 
-        if (isClosedDay(this.value)) {
-            showDatetimeError('Our shop is closed on Mondays and Thursdays.');
-            this.value = '';
-            refreshBaseTimeOptions();
+        if (!this.value) {
+            // No date selected - disable time dropdown
+            timeSelect.disabled = true;
+            timeSelect.innerHTML = '<option value="">まず日付を選択...</option>';
             return;
         }
 
+        if (isClosedDay(this.value)) {
+            showDatetimeError('月曜日と木曜日は定休日です。');
+            this.value = '';
+            timeSelect.disabled = true;
+            timeSelect.innerHTML = '<option value="">まず日付を選択...</option>';
+            return;
+        }
+
+        // Enable time dropdown and load options
+        timeSelect.disabled = false;
         refreshBaseTimeOptions();
         await applyReservationBlocking(this.value);
         combineAndSetHidden();
     });
 
     timeSelect.addEventListener('change', combineAndSetHidden);
+    
+    // Initialize: Disable time dropdown until date is selected
+    if (!dateInput.value) {
+        timeSelect.disabled = true;
+        timeSelect.innerHTML = '<option value="">まず日付を選択...</option>';
+    }
 
     /* ---------------- FORM VALIDATION FUNCTIONS ---------------- */
     function validateName() {
@@ -1246,10 +1266,19 @@
     });
 
     /* ---------------- INITIALIZE ON LOAD ---------------- */
-    // Load time options when page loads
-    if (dateInput.value) {
+    // Initialize time dropdown state based on whether date is selected
+    if (dateInput.value && !isClosedDay(dateInput.value)) {
+        // Date is pre-selected (e.g., from old() after validation error)
+        timeSelect.disabled = false;
         refreshBaseTimeOptions();
         applyReservationBlocking(dateInput.value);
+    } else {
+        // No date selected - disable time dropdown
+        timeSelect.disabled = true;
+        timeSelect.innerHTML = '<option value="">まず日付を選択...</option>';
+        if (dateInput.value && isClosedDay(dateInput.value)) {
+            dateInput.value = ''; // Clear closed day
+        }
     }
 
 });
