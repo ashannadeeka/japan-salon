@@ -867,7 +867,12 @@
         String(Math.floor(m / 60)).padStart(2, '0') + ':' +
         String(m % 60).padStart(2, '0');
 
-    const isClosedDay = dateStr => closedDays.includes(new Date(dateStr).getDay());
+    const isClosedDay = dateStr => {
+        // Parse date string as local date to avoid timezone issues
+        const [y, m, d] = dateStr.split('-').map(Number);
+        const date = new Date(y, m - 1, d);
+        return closedDays.includes(date.getDay());
+    };
 
     const combineAndSetHidden = () => {
         hiddenDatetime.value =
@@ -939,51 +944,35 @@
     }
 
     /* ---------------- RESERVATION BLOCKING ---------------- */
- async function applyReservationBlocking(date) {
-    if (!date) return;
+    async function applyReservationBlocking(date) {
+        if (!date) return;
 
-    try {
-        const res = await fetch(`/reservations-by-date?date=${date}`);
-        if (!res.ok) throw new Error('Network error');
+        try {
+            const res = await fetch(`/reservations-by-date?date=${date}`);
+            if (!res.ok) throw new Error('Network error');
 
-        const data = await res.json();
-        // example response:
-        // { "15:00": 2, "16:30": 1 }
+            const data = await res.json();
+            // New response format:
+            // { "10:30": { conflicts: 0, remaining: 2, disabled: false }, "11:00": { conflicts: 1, remaining: 1, disabled: false }, ... }
 
-        const blockedRanges = [];
+            /* -------- APPLY BLOCKS TO TIME OPTIONS -------- */
+            Array.from(timeSelect.options).forEach(opt => {
+                if (!opt.value || opt.disabled) return;
 
-        /* -------- SAME TIME SLOT >= 2 → BLOCK ±1 HOUR -------- */
-        Object.entries(data).forEach(([timeStr, count]) => {
-            if (count >= 2) {
-                const centerMin = timeToMinutes(timeStr);
+                const slotData = data[opt.value];
+                if (slotData && slotData.disabled) {
+                    opt.disabled = true;
+                    opt.textContent = `${opt.value} (予約不可)`;
+                } else if (slotData && slotData.remaining < 2) {
+                    opt.textContent = `${opt.value} (残り${slotData.remaining}枠)`;
+                }
+            });
 
-                blockedRanges.push([
-                    centerMin - 60, // 1 hour before
-                    centerMin + 60  // 1 hour after
-                ]);
-            }
-        });
-
-        /* -------- APPLY BLOCKS TO TIME OPTIONS -------- */
-        Array.from(timeSelect.options).forEach(opt => {
-            if (!opt.value || opt.disabled) return;
-
-            const optionMin = timeToMinutes(opt.value);
-
-            const isBlocked = blockedRanges.some(
-                ([start, end]) => optionMin >= start && optionMin <= end
-            );
-
-            if (isBlocked) {
-                opt.disabled = true;
-            }
-        });
-
-    } catch (error) {
-        console.error(error);
-        showDatetimeError('予約情報の取得に失敗しました');
+        } catch (error) {
+            console.error(error);
+            showDatetimeError('予約情報の取得に失敗しました');
+        }
     }
-}
 
 
     /* ---------------- EVENTS ---------------- */
@@ -991,7 +980,7 @@
         clearDatetimeError();
 
         if (isClosedDay(this.value)) {
-            showDatetimeError('Our shop is closed on Mondays and Thursdays.');
+            showDatetimeError('月曜日と木曜日は定休日です。');
             this.value = '';
             refreshBaseTimeOptions();
             return;
